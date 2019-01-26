@@ -7,7 +7,10 @@ import {
   Image,
   TextInput,
   Animated,
-  Dimensions
+  Dimensions,
+  Keyboard,
+  Platform,
+  BackHandler // for android
 } from "react-native";
 import * as Animatable from "react-native-animatable";
 import Icon from "react-native-vector-icons/Ionicons";
@@ -19,18 +22,105 @@ class LoginScreen extends Component {
     header: null
   };
 
+  state = {
+    placeholder: "Enter your mobile number"
+  };
+
   componentWillMount = () => {
     this.startHeight = new Animated.Value(150);
+
+    this.keyboardWillShowListener = Keyboard.addListener(
+      "keyboardWillShow",
+      this.keyboardWillShow
+    );
+    this.keyboardWillHideListener = Keyboard.addListener(
+      "keyboardWillHide",
+      this.keyboardWillHide
+    );
+
+    // for Android "keyboardDidShow" and "keyboardDidHide"
+    this.keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      this.keyboardWillShow
+    );
+    this.keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      this.keyboardWillHide
+    );
+
+    this.keyboardHeight = new Animated.Value(0);
+    this.forwardArrowOpacity = new Animated.Value(0);
+    this.borderBottomWidth = new Animated.Value(0);
+  };
+
+  keyboardWillShow = event => {
+    if (Platform.OS == "android") {
+      duration = 100;
+    } else {
+      duration = event.duration;
+    }
+    Animated.parallel([
+      Animated.timing(this.keyboardHeight, {
+        duration: duration + 100,
+        toValue: event.endCoordinates.height + 10
+      }),
+      Animated.timing(this.forwardArrowOpacity, {
+        duration: duration,
+        toValue: 1
+      }),
+      Animated.timing(this.borderBottomWidth, {
+        duration: duration,
+        toValue: 1
+      })
+    ]).start();
+  };
+
+  keyboardWillHide = event => {
+    if (Platform.OS == "android") {
+      duration = 100;
+    } else {
+      duration = event.duration;
+    }
+    Animated.parallel([
+      Animated.timing(this.keyboardHeight, {
+        duration: duration + 100,
+        toValue: 0
+      }),
+      Animated.timing(this.forwardArrowOpacity, {
+        duration: duration,
+        toValue: 0
+      }),
+      Animated.timing(this.borderBottomWidth, {
+        duration: duration,
+        toValue: 0
+      })
+    ]).start();
+
+    // for android
+    BackHandler.addEventListener("hardwareBackPress", () => {
+      if (this.startHeight._value > 150) {
+        this.backToInitial();
+        return true;
+      } else {
+        return false;
+      }
+    });
   };
 
   onPressAnimatedHeight = () => {
+    this.setState({
+      placeholder: "0912345678"
+    });
     Animated.timing(this.startHeight, {
       toValue: SCREEN_HEIGHT,
       duration: 500
-    }).start();
+    }).start(() => {
+      this.textInputMobile.focus();
+    });
   };
 
   backToInitial = () => {
+    Keyboard.dismiss();
     Animated.timing(this.startHeight, {
       toValue: 150,
       duration: 500
@@ -49,6 +139,21 @@ class LoginScreen extends Component {
     });
 
     const headerBackArrowOpacity = this.startHeight.interpolate({
+      inputRange: [150, SCREEN_HEIGHT],
+      outputRange: [0, 1]
+    });
+
+    const titleTextBottom = this.startHeight.interpolate({
+      inputRange: [150, 400, SCREEN_HEIGHT],
+      outputRange: [0, 0, 100]
+    });
+
+    const titleTextLeft = this.startHeight.interpolate({
+      inputRange: [150, SCREEN_HEIGHT],
+      outputRange: [100, 25]
+    });
+
+    const titleTextOpacity = this.startHeight.interpolate({
       inputRange: [150, SCREEN_HEIGHT],
       outputRange: [0, 1]
     });
@@ -73,6 +178,23 @@ class LoginScreen extends Component {
           <TouchableOpacity onPress={() => this.backToInitial()}>
             <Icon name="md-arrow-back" size={26} />
           </TouchableOpacity>
+        </Animated.View>
+        <Animated.View
+          style={{
+            position: "absolute",
+            width: 60,
+            height: 60,
+            right: 10,
+            bottom: this.keyboardHeight, // animated
+            opacity: this.forwardArrowOpacity, // animated
+            zIndex: 100,
+            backgroundColor: "#54575e",
+            borderRadius: 30,
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <Icon name="md-arrow-forward" size={26} color="white" />
         </Animated.View>
         <ImageBackground
           source={require("../../assets/login_bg.jpg")}
@@ -119,13 +241,25 @@ class LoginScreen extends Component {
                 </Text>
               </Animated.View>
               <TouchableOpacity onPress={() => this.onPressAnimatedHeight()}>
-                <View
+                <Animated.View
                   style={{
                     flexDirection: "row",
-                    marginTop: 25,
+                    marginTop: animatedMarginTop, // animated
                     paddingHorizontal: 25
                   }}
                 >
+                  <Animated.Text
+                    style={{
+                      position: "absolute",
+                      fontSize: 24,
+                      color: "grey",
+                      bottom: titleTextBottom,
+                      left: titleTextLeft,
+                      opacity: titleTextOpacity
+                    }}
+                  >
+                    Enter your mobile number
+                  </Animated.Text>
                   <Image
                     source={require("../../assets/myanmar.png")}
                     style={{
@@ -134,11 +268,12 @@ class LoginScreen extends Component {
                       resizeMode: "contain"
                     }}
                   />
-                  <View
+                  <Animated.View
                     pointerEvents="none"
                     style={{
                       flexDirection: "row",
-                      flex: 1
+                      flex: 1,
+                      borderBottomWidth: this.borderBottomWidth
                     }}
                   >
                     <Text
@@ -150,15 +285,18 @@ class LoginScreen extends Component {
                       +95
                     </Text>
                     <TextInput
-                      placeholder="Enter your mobile number"
+                      //   ref="textInputMobile" this is also valid
+                      ref={text => (this.textInputMobile = text)}
+                      keyboardType="numeric"
+                      placeholder={this.state.placeholder}
                       underlineColorAndroid="transparent"
                       style={{
                         flex: 1,
                         fontSize: 20
                       }}
                     />
-                  </View>
-                </View>
+                  </Animated.View>
+                </Animated.View>
               </TouchableOpacity>
             </Animated.View>
             <View
